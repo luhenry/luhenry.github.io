@@ -1,5 +1,6 @@
 ---
-layout: home
+layout: default
+title: "About"
 ---
 
 I joined Xamarin in March 2014, then Microsoft in March 2016 through Xamarin's acquisition. During my time at Xamarin, I worked on the Mono Runtime and its integration to the various Xamarin products (Xamarin.iOS, Xamarin.Android, VS for Mac). After a short stint in the .NET team from March 2019 to May 2019, I joined the Java Platform team in May 2019.
