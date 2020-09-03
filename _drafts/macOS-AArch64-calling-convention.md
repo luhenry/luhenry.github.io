@@ -20,7 +20,7 @@ Caused by: java.lang.IllegalArgumentException: classData is only applicable for 
 
 From a quick search for `classData is only applicable for hidden classes`, we find that the exception is thrown from [src/hotspot/share/prims/jvm.cpp:1025](https://github.com/openjdk/jdk/blob/869b05169fdb3a1ac851b367a2284ca0c5bb4d7a/src/hotspot/share/prims/jvm.cpp#L1025).
 
-Let's take a look with a debugger to understand the bug a bit further:
+Let's run with a debugger to gather more information about the bug:
 
 ```
 $> lldb -- build/macosx-aarch64-server-slowdebug/jdk/bin/java -version
@@ -44,7 +44,6 @@ Process 61939 stopped
    1027     if (is_nestmate) {
    1028       THROW_MSG_0(vmSymbols::java_lang_IllegalArgumentException(), "dynamic nestmate is only applicable for hidden classes");
 Target 0: (java) stopped.
-(lldb)
 ```
 
 We have, `is_hidden = (flags & HIDDEN_CLASS) == HIDDEN_CLASS`, which is false with `flags = 10`. However, `classData` has an unexpected value: `0xA`. It is indeed non-NULL, which is why it throws an exception, but we expect either a NULL value or a valid pointer to a Java object. Here, `0xA` is neither of these.
@@ -119,7 +118,7 @@ The value of `classData` in native is the last clue we need: `0xA` is the hexade
 
 It is a classic example of a calling convention mismatch between the caller and the callee. On the one hand, the caller, respecting a specific ABI[^1], puts the parameters in a pre-defined set of locations (register or stack slots). On the other hand, the callee, respecting another ABI, expects the parameters to be passed in a different pre-defined set of locations.
 
-## Understanding the calling convention
+## Understanding the ABI
 
 To simplify further explorations, I am using [godbolt.org](https://godbolt.org) and the following C snippet:
 
@@ -141,6 +140,8 @@ void func(int p0, int p1, int p2, int p3, int p4, int p5, int p6, int p7, int p8
 }
 ```
 
+We are focusing on the calling convention of this snippet of code.
+
 ### The native calling convention
 
 Because it is the native C/C++ compiler compiling the `Java_java_lang_ClassLoader_defineClass0` function, let's start by the native side to understand where it expects its parameters to be passed.
@@ -157,7 +158,7 @@ That is in line with the [official documentation](https://developer.apple.com/li
 
 Now, let's check where the OpenJDK passes these parameters.
 
-Since we have access to the sources, I do not need to look at generated assembly. Yeah!
+(Since we have access to the sources, we do not need to look at generated assembly. Yeah!)
 
 
 
