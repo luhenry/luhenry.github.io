@@ -120,7 +120,7 @@ It is a classic example of a calling convention mismatch between the caller and 
 
 ## Understanding the ABI
 
-To simplify further explorations, I am using [godbolt.org](https://godbolt.org) and the following C snippet:
+I am using [godbolt.org](https://godbolt.org) and the following C snippet to simplify further explorations.
 
 ```
 void func(int p0, int p1, int p2, int p3, int p4, int p5, int p6, int p7, int p8, int p9, int p10, int p11) {
@@ -150,7 +150,7 @@ Let's analyze from the generated assembly where parameters are expected:
  - `p0`, `p1`, `p2`, `p3`, `p4`, `p5`, `p6` and `p7` are passed in registers in `w0`[^2], `w1`[^2], `w2`, `w3`, `w4`, `w5`, `w6`, and `w7` respectively
  - `p8`, `p9`, `p10` and `p11` are passed on the stack at `sp[0]`, `sp[4]`, `sp[8]` and `sp[12]` respectively
 
-We note the arguments passed on the stack are 4-bytes aligned as they are of type `int` which is 4-bytes wide.
+We note the arguments passed on the stack are 4-bytes aligned as they are of type `int`, which is 4-bytes wide.
 
 That is in line with the [official documentation](https://developer.apple.com/library/archive/documentation/Xcode/Conceptual/iPhoneOSABIReference/Articles/ARM64FunctionCallingConventions.html#//apple_ref/doc/uid/TP40013702-SW4) of macOS-AArch64 provided by Apple. (This link is for the iOS-AArch64 ABI since, per [Addressing Architectural Differences in Your macOS Code](https://developer.apple.com/documentation/apple_silicon/addressing_architectural_differences_in_your_macos_code) > "Update C++ Code", the macOS-AArch64 ABI matches the iOS-AArch64 ABI.)
 
@@ -158,7 +158,7 @@ That is in line with the [official documentation](https://developer.apple.com/li
 
 Now, let's check where the OpenJDK passes these parameters.
 
-(Since we have access to the sources, we do not need to look at generated assembly. Yeah!)
+(Since we have access to the sources, we do not need to look at the generated assembly. Yeah!)
 
 
 
