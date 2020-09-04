@@ -5,6 +5,8 @@ layout: post
 
 _This is a series about some discoveries I make in adding support for macOS-AArch64 to the OpenJDK_
 
+
+
 ## Understanding the problem
 
 While trying to make `java -version` run, I encountered the following issue:
@@ -149,19 +151,19 @@ For a recap of where parameters are passed from Hotspot:
 Let's map that in a table. (Note that the memory ordering is little-endian.)
 
 ```
-sp+0     sp+4     sp+8     sp+12    sp+16    sp+20    sp+24    sp+28
-00000000 00000000 10000000 00000000 a0000000 00000000 022d1a9f 10000000
-^ pd              ^ init            ^ flags           ^ classData       // Java ABI
-^ pd              ^ init   ^ flags  ^ classData                         // native ABI
+        sp+0     sp+4     sp+8     sp+12    sp+16    sp+20    sp+24    sp+28
+        00000000 00000000 10000000 00000000 a0000000 00000000 022d1a9f 10000000
+  Java: ^ pd              ^ init            ^ flags           ^ classData
+native: ^ pd              ^ init   ^ flags  ^ classData
 ```
 
-From that, we can see why `flags` is `10` in Java an `0` in native, and why `classData` is a valid pointer in Java but `0xa` in native.
+We can now see why `flags` is `10` in Java but `0` in native, and why `classData` is a valid pointer in Java but `0xa` in native.
 
 ## How to fix it?
 
 You may ask, why in the heck is OpenJDK passing arguments like that? The answer might be quite disappointing: because it is the default ABI on AArch64, and it is, in fact, macOS-AArch64 that deviates from the norm. It is also why there is no such issue in the port of Hotspot to Linux-AArch64 and Windows-AArch64.
 
-In `void InterpreterRuntime::SignatureHandlerGenerator::pass_int();`, we have the following:
+In `InterpreterRuntime::SignatureHandlerGenerator::pass_int`, we have the following:
 
 ```
 void InterpreterRuntime::SignatureHandlerGenerator::pass_int() {
@@ -179,7 +181,7 @@ void InterpreterRuntime::SignatureHandlerGenerator::pass_int() {
 
 [...]
 
-  default:
+  default: // for any parameter passed on the stack
     __ ldr(r0, src);
     __ str(r0, Address(to(), _stack_offset));
     _stack_offset += wordSize;
@@ -189,7 +191,7 @@ void InterpreterRuntime::SignatureHandlerGenerator::pass_int() {
 }
 ```
 
-The `default` case is for any parameter passed on the stack. The solution is then to make sure that the `_stack_offset` for the next parameter is not 8-bytes aligned, but 4-bytes aligned in the case of an `int`.
+The solution is to make sure that the `_stack_offset` for the next parameter is not 8-bytes aligned, but 4-bytes aligned in the case of an `int`.
 
 The fix is the following:
 
@@ -230,5 +232,9 @@ openjdk version "16-internal" 2021-03-16
 OpenJDK Runtime Environment (slowdebug build 16-internal+0-adhoc.luhenry.openjdk-jdk)
 OpenJDK 64-Bit Server VM (slowdebug build 16-internal+0-adhoc.luhenry.openjdk-jdk, mixed mode)
 ```
+
+## Conclusion
+
+
 
 [^1]: [Application Binary Interface](https://en.wikipedia.org/wiki/Application_binary_interface)
