@@ -30,31 +30,31 @@ int main(int argc, char **argv) {
 
 Because you declared the signature of the function `my_func`, the compiler will know how to generate the code to call it. It will know how many parameters there are, the type of each parameter, and the return type. With that, it knows whether you're invoking the method correctly:
  - If you try to pass more or less than 12 parameters, it will fail to compile
- - If you try to pass a `long` instead of a `char`, it will fail to compile
+ - If you try to pass a `long` instead of a `char`, it may fail to compile
  - If you ignore the return value, it may emit a warning
 
-The API is then a contract between the caller and the callee for functions and data types. (This is the same for classes and methods in Object-Oriented Programming, for classes and their methods.)
+The API is then a contract between the caller and the callee for functions and data types. (This is the same for classes and methods in Object-Oriented Programming.)
 
-After the compiler validates that a caller invokes a function the way the callee expects it, it generates the assembly code that does the call. That is where the ABI comes into play.
+After the compiler validates that a caller calls a function the way the callee expects it, it generates the assembly code that does the call. That is where the ABI comes into play.
 
-Overall, an ABI is similar to an API: it defines a set of conventions. The API does it at the source-level, and the ABI does it at the assembly-level.
+Overall, an ABI is similar to an API: it defines a set of conventions, the API at the source-level, and the ABI at the binary-level.
 
 Parts of what the ABI defines are:
- - The **calling convention**, or "how to invoke a function": the instructions to emit, how to pass parameters, how to set up the stack, which way to allocate the stack (up or down)
+ - The **calling convention**, or "how to call a function": the instructions to emit, how to pass parameters, how to set up the stack, which way to allocate the stack (up or down)
  - The **size and alignment of basic data types**, like `int`, `short`, `long`, `long long` or pointers
  - The **usage of machine registers**, like `r31` to store the stack pointer, or `r30` to store the caller's return address (also called the "link register" on ARM)
 
 It is also specific to each platform: Windows vs. Linux vs. macOS, ARM vs. x86, 32-bits vs. 64-bits.
 
-The most common ABI is the C ABI. Following it allows different languages (each with a specific compiler) to call each other's functions. For example, the Java compiler knows nothing about C/C++ headers. Still, by defining the equivalent signature in Java to the C function, it will know where to put the parameters, the size of each parameter, and where to get the return value, by merely following the ABI.
+The most widespread ABI is the C ABI. It is commonly used for different languages (each with their own compiler) to call each other's functions. For example, the Java compiler knows nothing about C/C++ headers. Still, by defining the equivalent signature in Java to the C function, it will know where to put the parameters, the size of each parameter, and where to get the return value, merely by following the C ABI.
 
 ### An analogy
 
-Imagine an assembly line where two robots are collaborating to build an end-product. Robot-1 puts parts into five boxes, waits for Robot-2 to do its job, picks up the end-product from the "return" box, and stores it elsewhere. Robot-2 takes the parts from the five boxes, assembles them, and drops the end-product back into the "return" box. Unfortunately, each robot has no way to communicate other than through these boxes, and you can reconfigure these boxes only when you're re-designing the assembly line.
+Imagine an assembly line where two robots are collaborating to build an end-product. Robot-1 puts parts into five boxes, waits for Robot-2 to do its job, picks up the end-product from the "return" box, and stores it elsewhere. Robot-2 takes the parts from the five boxes, assembles them, and drops the end-product back into the "return" box. Unfortunately, each robot has no way to communicate other than through these boxes, and you can reconfigure these boxes only when you're re-designing the whole factory.
 
-For a smooth operation, both robots need to agree on which box to put each part. If at any point, Robot-1 starts putting parts into other boxes, or Robot-2 takes a part from a different box, Robot-2 can miss some of the necessary parts or end up assembling the wrong end-product.
+For a smooth operation, both robots need to agree on which part goes in which box. If at any point, Robot-1 starts putting parts into other boxes, or Robot-2 takes a part from a different box, Robot-2 can miss some of the necessary parts or end up assembling the wrong end-product.
 
-The ABI defines the convention that allows both robots to work effectively as each knows, for example, which box to use for which part and each part's size in each box. It also makes it possible to drop-in a new robot, as long as it respects where and how each part goes in each box. This new robot then doesn't even need to come from the same manufacturer or be programmed the same way, as long as it respects each part's convention to come from specific boxes.
+The ABI defines the convention that allows both robots to work effectively. For example, each knows which box to use for which part and each part's size in each box. It also makes it possible to drop-in a new robot, as long as it respects which part goes in which box. This new robot then doesn't even need to come from the same manufacturer or be programmed the same way, as long as it respects taking each part from the predefined box.
 
 ## Example
 
