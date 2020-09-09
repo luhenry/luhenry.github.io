@@ -21,7 +21,7 @@ email: hi@ludovic.dev
 baseurl: "" # the subpath of your site, e.g. /blog
 url: "https://blog.ludovic.dev" # the base hostname & protocol for your site, e.g. http://example.com
 github_username: "luhenry"
-linkedin_username: "ludovic-henry-2168243b"
+linkedin_username: "ludovic-dev"
 
 # Build settings
 markdown: kramdown
