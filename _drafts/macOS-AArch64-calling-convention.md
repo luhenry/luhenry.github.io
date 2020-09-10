@@ -7,9 +7,9 @@ _This post is part a [series]({% post_url 2020-09-07-openjdk-on-aarch64 %}) abou
 
 _If you don't know what an ABI or a calling convention is, I invite you to read [What's an ABI anyway?]({% post_url 2020-09-08-whats-an-abi-anyway %}). If you're still not sure what an ABI is, let me know at [hi@ludovic.dev](mailto:hi@ludovic.dev), and I'll make sure to update the article._
 
-In [ARM64 Function Calling Convention](https://developer.apple.com/library/archive/documentation/Xcode/Conceptual/iPhoneOSABIReference/Articles/ARM64FunctionCallingConventions.html), Apple describes where they decided to differ from the [official ARM64 calling convention](https://developer.arm.com/documentation/ihi0055/b/).
+In [ARM64 Function Calling Convention](https://developer.apple.com/library/archive/documentation/Xcode/Conceptual/iPhoneOSABIReference/Articles/ARM64FunctionCallingConventions.html), Apple describes where and how they decided to differ from the [official calling convention](https://developer.arm.com/documentation/ihi0055/b/).
 
-The more impactful divergence to Hotspot is the alignment of parameters passed on the stack. In the official ARM64 calling convention, parameters are 8-bytes aligned, while on macOS (and iOS), the parameters are aligned on their size. For example, `int` is 4-bytes wide and 4-bytes aligned, and `short` is 2-bytes wide and 2-bytes aligned. That impacts any Java code calling native code (into the VM or via JNI, for example). Luckily there are only a few places in Hotspot that generate this transition from Java to native: in the interpreter and in the compiler.
+The more impactful divergence to Hotspot is the alignment of parameters passed on the stack. In the official calling convention, parameters are 8-bytes aligned, while on macOS (and iOS), the parameters are aligned on their size. For example, `int` is 4-bytes wide and 4-bytes aligned, and `short` is 2-bytes wide and 2-bytes aligned. That impacts any Java code calling into native code (into the VM or via JNI, for example). Luckily there are only a few places in Hotspot that generate this transition from Java to native: in the interpreter and in the compiler.
 
 Due to technical and historical reasons, the code is not shared across these two. We'll then need to modify both for everything to work.
 
@@ -54,7 +54,7 @@ Process 61939 stopped
 Target 0: (java) stopped.
 ```
 
-We have, `is_hidden = (flags & HIDDEN_CLASS) == HIDDEN_CLASS`, which is false with `flags = 10`. However, `classData` has an unexpected value: `0xa`. It is indeed non-NULL, which is why it throws an exception, but we expect either a NULL value or a valid pointer to a Java object. Here, `0xa` is neither of these.
+We have, `is_hidden = (flags & HIDDEN_CLASS) == HIDDEN_CLASS`, which is false with `flags = 10`. However, `classData` has an unexpected value: `0xa`. It is indeed non-NULL, which is why it throws an exception, but we expect either a NULL value or a valid pointer to a Java object. Here, `0xa` is neither of those.
 
 Let's backtrack a bit and figure out where these values come from.
 
@@ -71,7 +71,7 @@ First, let's take a look at the backtrace:
 [...]
 ```
 
-We can see that the value of `classData` comes without modification from `Java_java_lang_ClassLoader_defineClass0`. Looking further into this function, we note that it is the native implementation of `java.lang.ClassLoader.defineClass0` (see [src/java.base/share/classes/java/lang/ClassLoader.java:1134](https://github.com/openjdk/jdk/blob/869b05169fdb3a1ac851b367a2284ca0c5bb4d7a/src/java.base/share/classes/java/lang/ClassLoader.java#L1134)).
+We can see that the value of `classData` comes straight from `Java_java_lang_ClassLoader_defineClass0`. Looking further into this function, we note that it is the native implementation of `java.lang.ClassLoader.defineClass0` (see [src/java.base/share/classes/java/lang/ClassLoader.java:1134](https://github.com/openjdk/jdk/blob/869b05169fdb3a1ac851b367a2284ca0c5bb4d7a/src/java.base/share/classes/java/lang/ClassLoader.java#L1134)).
 
 Next, let's verify what values Java is passing:
 
@@ -116,13 +116,13 @@ Process 64011 stopped
 Target 0: (java) stopped.
 ```
 
-Here what we have learned so far:
+Here is what we have learned so far:
 - `flags` is equal to `10` in Java but `0` in native
 - `classData` is a valid, non-NULL object in Java, but it is equal to `0xa` in native.
 
 It is a classic example of a calling convention mismatch between the caller and the callee. On the one hand, the caller, respecting a specific ABI, puts the parameters in a pre-defined set of locations (register or stack slots). On the other hand, the callee, respecting another ABI, expects the parameters to be passed in a different pre-defined set of locations.
 
-## Understanding the difference in ABI
+## Understanding the differences in ABI
 
 Let's visualize the differences between the calling conventions of Linux-AArch64 and macOS-AArch64.
 
@@ -143,7 +143,7 @@ Let's visualize the differences between the calling conventions of Linux-AArch64
 
 You notice the difference between Linux-AArch64 and macOS-AArch64 around `flags` and `classData`.
 
-Now, let's map the stack at the time of the call. _(Note the memory ordering is little-endian.)_
+Let's map the stack at the time of the call. _(Note that the memory ordering is little-endian.)_
 
 ```
         sp+0     sp+4     sp+8     sp+12    sp+16    sp+20    sp+24    sp+28
@@ -152,7 +152,7 @@ Now, let's map the stack at the time of the call. _(Note the memory ordering is 
 native: ^ pd              ^ init   ^ flags  ^ classData
 ```
 
-It's now clear why `flags` is `10` in Java but `0` in native, and why `classData` is a valid pointer in Java but `0xa` in native.
+This makes it clear why `flags` is `10` in Java but `0` in native, and why `classData` is a valid pointer in Java but `0xa` in native.
 
 ## How to fix it?
 
