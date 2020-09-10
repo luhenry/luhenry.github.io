@@ -56,7 +56,7 @@ An ABI is like a contract between two robots assembling parts to build a product
 
 For example, Robot-1 puts parts into five boxes, waits for Robot-2 to do its job, picks up the product from the "return" box, and stores it elsewhere. Robot-2 takes the parts from the five boxes, assembles them, and drops the product back into the "return" box.
 
-For a smooth operation, both robots need to agree on which part goes in which box. If, at any point, Robot-1 starts putting a part into another box, the other robot can miss some of the necessary parts or even assemble the wrong product.
+For a smooth operation, both robots need to agree on which part goes into which box. If, at any point, Robot-1 starts putting one the part into another box, the other robot will miss necessary parts and assemble the wrong product.
 
 The ABI also makes it possible to drop-in a new robot, as long as it abides by the established contract. This new robot then doesn't even need to come from the same manufacturer or be programmed the same way; it only has to follow the ABI.
 
