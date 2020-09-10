@@ -24,7 +24,7 @@ java.lang.InternalError: DMH.invokeStatic=Lambda(a0:L,a1:L,a2:L,a3:L,a4:L,a5:L,a
     t7:L=DirectMethodHandle.internalMemberName(a0:L);
     t8:L=MethodHandle.linkToStatic(a1:L,a2:L,a3:L,a4:L,a5:L,a6:L,t7:L);t8:L}
 Caused by: java.lang.IllegalArgumentException: classData is only applicable for hidden classes
-`"
+```
 
 From a quick search for `classData is only applicable for hidden classes`, we find that the exception is thrown from [src/hotspot/share/prims/jvm.cpp:1025](https://github.com/openjdk/jdk/blob/869b05169fdb3a1ac851b367a2284ca0c5bb4d7a/src/hotspot/share/prims/jvm.cpp#L1025).
 
@@ -52,7 +52,7 @@ Process 61939 stopped
    1027     if (is_nestmate) {
    1028       THROW_MSG_0(vmSymbols::java_lang_IllegalArgumentException(), "dynamic nestmate is only applicable for hidden classes");
 Target 0: (java) stopped.
-`"
+```
 
 We have, `is_hidden = (flags & HIDDEN_CLASS) == HIDDEN_CLASS`, which is false with `flags = 10`. However, `classData` has an unexpected value: `0xa`. It is indeed non-NULL, which is why it throws an exception, but we expect either a NULL value or a valid pointer to a Java object. Here, `0xa` is neither of those.
 
@@ -69,7 +69,7 @@ First, let's take a look at the backtrace:
     frame #3: 0x0000000108080aa0
     frame #4: 0x000000010807bde0
 [...]
-`"
+```
 
 We can see that the value of `classData` comes straight from `Java_java_lang_ClassLoader_defineClass0`. Looking further into this function, we note that it is the native implementation of `java.lang.ClassLoader.defineClass0` (see [src/java.base/share/classes/java/lang/ClassLoader.java:1134](https://github.com/openjdk/jdk/blob/869b05169fdb3a1ac851b367a2284ca0c5bb4d7a/src/java.base/share/classes/java/lang/ClassLoader.java#L1134)).
 
@@ -86,7 +86,7 @@ Next, let's verify what values Java is passing:
                  return ClassLoader.defineClass0(loader, lookup, name, b, 0, b.length, pd, initialize, flags, classData);
              }
              public Class<?> findBootstrapClassOrNull(ClassLoader cl, String name) {
-`"
+```
 
 ```
 $> lldb -- build/macosx-aarch64-server-slowdebug/jdk/bin/java -version
@@ -114,7 +114,7 @@ Process 64011 stopped
    228
    229      if (data == NULL) {
 Target 0: (java) stopped.
-`"
+```
 
 Here is what we have learned so far:
 - `flags` is equal to `10` in Java but `0` in native
@@ -145,12 +145,12 @@ You notice the difference between Linux-AArch64 and macOS-AArch64 around `flags`
 
 Let's map the stack at the time of the call. _(Note that the memory ordering is little-endian.)_
 
-`"
+```
         sp+0     sp+4     sp+8     sp+12    sp+16    sp+20    sp+24    sp+28
         00000000 00000000 10000000 00000000 a0000000 00000000 022d1a9f 10000000
   Java: ^ pd              ^ init            ^ flags           ^ classData
 native: ^ pd              ^ init   ^ flags  ^ classData
-`"
+```
 
 This clarifies why `flags` is `10` in Java but `0` in native, and why `classData` is a valid pointer in Java but `0xa` in native.
 
@@ -182,7 +182,7 @@ void InterpreterRuntime::SignatureHandlerGenerator::pass_int() {
     break;
   }
 }
-`"
+```
 
 The solution is to ensure that the `_stack_offset` for the next parameter is not 8-bytes aligned, but 4-bytes aligned for an `int`.
 
@@ -198,7 +198,7 @@ The solution is to ensure that the `_stack_offset` for the next parameter is not
      _num_int_args++;
      break;
    }
-`"
+```
 
 However, we still need to ensure that any 8-bytes wide values (like `long`, objects, or pointers in general) are still 8-bytes aligned.
 
@@ -213,7 +213,7 @@ However, we still need to ensure that any 8-bytes wide values (like `long`, obje
      __ ldr(r0, src);
      __ str(r0, Address(to(), _stack_offset));
      _stack_offset += wordSize;
-`"
+```
 
 With these fixes, it now runs successfully:
 
@@ -222,7 +222,7 @@ $> build/macosx-aarch64-server-slowdebug/jdk/bin/java -version
 openjdk version "16-internal" 2021-03-16
 OpenJDK Runtime Environment (slowdebug build 16-internal+0-adhoc.luhenry.openjdk-jdk)
 OpenJDK 64-Bit Server VM (slowdebug build 16-internal+0-adhoc.luhenry.openjdk-jdk, mixed mode)
-`"
+```
 
 ## Conclusion
 
