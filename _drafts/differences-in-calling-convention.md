@@ -1,5 +1,5 @@
 ---
-title: "macOS-AArch64: Calling Convention"
+title: "Differences in Calling Convention"
 layout: post
 ---
 
@@ -7,7 +7,7 @@ _This post is part a [series]({% post_url 2020-09-07-openjdk-on-aarch64 %}) abou
 
 _If you don't know what an ABI or a calling convention is, I invite you to read [What's an ABI anyway?]({% post_url 2020-09-08-whats-an-abi-anyway %}). If you're still not sure what an ABI is, let me know at [hi@ludovic.dev](mailto:hi@ludovic.dev), and I'll make sure to update the article._
 
-In [ARM64 Function Calling Convention](https://developer.apple.com/library/archive/documentation/Xcode/Conceptual/iPhoneOSABIReference/Articles/ARM64FunctionCallingConventions.html), Apple describes where and how they decided to differ from the [official calling convention](https://developer.arm.com/documentation/ihi0055/b/).
+In [ARM64 Function Calling Convention](https://developer.apple.com/library/archive/documentation/Xcode/Conceptual/iPhoneOSABIReference/Articles/ARM64FunctionCallingConventions.html), Apple describes where and how macOS-AArch64 calling convention differs from the [official one](https://developer.arm.com/documentation/ihi0055/b/) used on Linux and Windows.
 
 The more impactful divergence to Hotspot is the alignment of parameters passed on the stack. In the official calling convention, parameters are 8-bytes aligned, while on macOS (and iOS), the parameters are aligned on their size. For example, `int` is 4-bytes wide and 4-bytes aligned, and `short` is 2-bytes wide and 2-bytes aligned. That impacts any Java code calling into native code (into the VM or via JNI, for example). Luckily there are only a few places in Hotspot that generate this transition from Java to native: in the interpreter and in the compiler.
 
@@ -226,6 +226,6 @@ OpenJDK 64-Bit Server VM (slowdebug build 16-internal+0-adhoc.luhenry.openjdk-jd
 
 ## Conclusion
 
-We explored how the macOS-AArch64 ABI differs from the Linux-AArch64 ABI, and the impact it has on Java to native method calls.
+We explored how the macOS-AArch64 ABI differs from the Linux-AArch64 ABI, and the impact it has on Java to native method calls. We also explored what modifications are then necessary in Hotspot to match the different calling convention between macOS, Linux and Windows.
 
-In the post, I'll dive into a new macOS security feature: JIT write protection.
+In later posts, I’ll talk about some of the issues I ran into when porting the OpenJDK to Windows-AArch64 and macOS-AArch64, the subtle differences in their ABI, and the necessary modifications to the OpenJDK.
