@@ -3,13 +3,19 @@ title: "macOS-AArch64: Calling Convention"
 layout: post
 ---
 
-_This is a series about some discoveries I make in adding support for macOS-AArch64 to the OpenJDK_
+_This post is part a [series]({% post_url 2020-09-07-openjdk-on-aarch64 %}) about some discoveries I make as I am adding support for Windows-AArch64 and macOS-AArch64 to the OpenJDK_
 
+_If you don't know what an ABI or a calling convention is, I invite you to read [What's an ABI anyway?]({% post_url 2020-09-08-whats-an-abi-anyway %}). If you're still not sure what an ABI is, let me know at [hi@ludovic.dev](mailto:hi@ludovic.dev), and I'll make sure to update the article._
 
+In [ARM64 Function Calling Convention](https://developer.apple.com/library/archive/documentation/Xcode/Conceptual/iPhoneOSABIReference/Articles/ARM64FunctionCallingConventions.html), Apple describes where they decided to differ from the [official ARM64 calling convention](https://developer.arm.com/documentation/ihi0055/b/).
 
-## Understanding the problem
+The more impactful divergence to Hotspot is the alignment of parameters passed on the stack. In the official ARM64 calling convention, parameters are 8-bytes aligned, while on macOS (and iOS), the parameters are aligned on their size. For example, `int` is 4-bytes wide and 4-bytes aligned, and `short` is 2-bytes wide and 2-bytes aligned. That impacts any Java code calling native code (into the VM or via JNI, for example). Luckily there are only a few places in Hotspot that generate this transition from Java to native: in the interpreter and in the compiler.
 
-While trying to make `java -version` run, I encountered the following issue:
+Due to technical and historical reasons, the code is not shared across these two. We'll then need to modify both for everything to work.
+
+## The symptoms
+
+While trying to make `java -version` run, I encounter the following issue:
 
 ```
 $> build/macosx-aarch64-server-slowdebug/jdk/bin/java -version
@@ -110,45 +116,34 @@ Process 64011 stopped
 Target 0: (java) stopped.
 ```
 
-We note a few things:
- - `flags` is equal to `10` in Java but `0` in native
- - `classData` is a valid, non-NULL object in Java, but it is equal to `0xa` in native.
+Here what we have learned so far:
+- `flags` is equal to `10` in Java but `0` in native
+- `classData` is a valid, non-NULL object in Java, but it is equal to `0xa` in native.
 
-The value of `classData` in native is the last clue we need: `0xa` is the hexadecimal representation of `10`. That means that while Java is passing `flags = 10` and `classData = <valid jobject>`, the native callee receives `flags = 0` and `classData = 10`.
+It is a classic example of a calling convention mismatch between the caller and the callee. On the one hand, the caller, respecting a specific ABI, puts the parameters in a pre-defined set of locations (register or stack slots). On the other hand, the callee, respecting another ABI, expects the parameters to be passed in a different pre-defined set of locations.
 
-It is a classic example of a calling convention mismatch between the caller and the callee. On the one hand, the caller, respecting a specific ABI[^1], puts the parameters in a pre-defined set of locations (register or stack slots). On the other hand, the callee, respecting another ABI, expects the parameters to be passed in a different pre-defined set of locations.
+## Understanding the difference in ABI
 
-## Understanding the ABI
+Let's visualize the differences between the calling conventions of Linux-AArch64 and macOS-AArch64.
 
-I am using [godbolt.org](https://godbolt.org) and the following C snippet to explore more simply the native calling convention.
+| Parameter | Size (bytes) | Linux-AArch64 | macOS-AArch64 |
+| --------- | -----------: | ------------: | ------------: |
+| `env`     | 8            | `r0`          | `r0`          |
+| `cls`     | 8            | `r1`          | `r1`          |
+| `loader`  | 8            | `r2`          | `r2`          |
+| `lookup`  | 8            | `r3`          | `r3`          |
+| `name`    | 8            | `r4`          | `r4`          |
+| `data`    | 8            | `r5`          | `r5`          |
+| `offset`  | 4            | `r6`          | `r6`          |
+| `length`  | 4            | `r7`          | `r7`          |
+| `pd`      | 8            | `sp+0`        | `sp+0`        |
+| `initialize` | 1         | `sp+8`        | `sp+8`        |
+| `flags`   | 4            | **`sp+16`**   | **`sp+12`**   |
+| `classData` | 8          | **`sp+24`**   | **`sp+16`**   |
 
-```
-void func(int64_t p0, int64_t p1, int64_t p2, int64_t p3, int64_t p4, int64_t p5, int32_t p6, int32_t p7, int64_t p8, bool p9, int32_t p10, int64_t p11);
-```
+You notice the difference between Linux-AArch64 and macOS-AArch64 around `flags` and `classData`.
 
-### The native calling convention
-
-Let's start by the native side to understand where it expects its parameters to be passed, because it is the native C/C++ compiler compiling the `Java_java_lang_ClassLoader_defineClass0` function.
-
-From analyzing the generated assembly, the parameters are expected as follows:
- - `p0`, `p1`, `p2`, `p3`, `p4`, `p5`, `p6` and `p7` are read from registers in `x0`, `x1`, `x2`, `x3`, `x4`, `x5`, `w6`, and `w7` respectively
- - `p8`, `p9`, `p10` and `p11` are read from the stack at `sp+0`, `sp+8`, `sp+12` and `sp+16` respectively
-
-That is in line with the [official documentation](https://developer.apple.com/library/archive/documentation/Xcode/Conceptual/iPhoneOSABIReference/Articles/ARM64FunctionCallingConventions.html#//apple_ref/doc/uid/TP40013702-SW4) of macOS-AArch64 provided by Apple. (This link is for the iOS-AArch64 ABI since, per [Addressing Architectural Differences in Your macOS Code](https://developer.apple.com/documentation/apple_silicon/addressing_architectural_differences_in_your_macos_code) > "Update C++ Code", the macOS-AArch64 ABI matches the iOS-AArch64 ABI.)
-
-### The Java on AArch64 calling convention
-
-Now, let's check how Hotspot passes parameters. (Since we have access to the sources, we do not need to look at the generated assembly. Yeah!)
-
-This native function can be called either by the interpreter or by compiled code. In our case, we know that it is the interpreter which invokes `java.lang.ClassLoader.defineClass0`. We then focus on how the interpreter invokes native methods.
-
-From looking at [src/hotspot/cpu/aarch64/interpreterRT_aarch64.cpp:89](https://github.com/openjdk/jdk/blob/869b05169fdb3a1ac851b367a2284ca0c5bb4d7a/src/hotspot/cpu/aarch64/interpreterRT_aarch64.cpp#L89), we notice that the arguments passed on the stack are 8-bytes aligned. That's our problem!
-
-For a recap of where parameters are passed from Hotspot:
- - `p0`, `p1`, `p2`, `p3`, `p4`, `p5`, `p6` and `p7` are written to registers in `x0`, `x1`, `x2`, `x3`, `x4`, `x5`, `w6`, and `w7` respectively
- - `p8`, `p9`, `p10` and `p11` are written to the stack at `sp+0`, `sp+8`, `sp+16` and `sp+24` respectively
-
-Let's map that in a table. (Note that the memory ordering is little-endian.)
+Now, let's map the stack at the time of the call. _(Note the memory ordering is little-endian.)_
 
 ```
         sp+0     sp+4     sp+8     sp+12    sp+16    sp+20    sp+24    sp+28
@@ -157,13 +152,11 @@ Let's map that in a table. (Note that the memory ordering is little-endian.)
 native: ^ pd              ^ init   ^ flags  ^ classData
 ```
 
-We can now see why `flags` is `10` in Java but `0` in native, and why `classData` is a valid pointer in Java but `0xa` in native.
+It's now clear why `flags` is `10` in Java but `0` in native, and why `classData` is a valid pointer in Java but `0xa` in native.
 
 ## How to fix it?
 
-You may ask, why in the heck is OpenJDK passing arguments like that? The answer might be quite disappointing: because it is the default ABI on AArch64, and it is, in fact, macOS-AArch64 that deviates from the norm. It is also why there is no such issue in the port of Hotspot to Linux-AArch64 and Windows-AArch64.
-
-In `InterpreterRuntime::SignatureHandlerGenerator::pass_int`, we have the following:
+In [`InterpreterRuntime::SignatureHandlerGenerator::pass_int`](https://github.com/openjdk/jdk/blob/869b05169fdb3a1ac851b367a2284ca0c5bb4d7a/src/hotspot/cpu/aarch64/interpreterRT_aarch64.cpp#L54-L93), we have the following:
 
 ```
 void InterpreterRuntime::SignatureHandlerGenerator::pass_int() {
@@ -191,9 +184,7 @@ void InterpreterRuntime::SignatureHandlerGenerator::pass_int() {
 }
 ```
 
-The solution is to make sure that the `_stack_offset` for the next parameter is not 8-bytes aligned, but 4-bytes aligned in the case of an `int`.
-
-The fix is the following:
+The solution is to ensure that the `_stack_offset` for the next parameter is not 8-bytes aligned, but 4-bytes aligned for an `int`.
 
 ```
 --- a/src/hotspot/cpu/aarch64/interpreterRT_aarch64.cpp
@@ -209,7 +200,7 @@ The fix is the following:
    }
 ```
 
-However, we still need to make sure that any 8-bytes wide values (like `long long`, objects or pointers in general) are still 8-bytes aligned:
+However, we still need to ensure that any 8-bytes wide values (like `long`, objects, or pointers in general) are still 8-bytes aligned.
 
 ```
 --- a/src/hotspot/cpu/aarch64/interpreterRT_aarch64.cpp
@@ -235,6 +226,6 @@ OpenJDK 64-Bit Server VM (slowdebug build 16-internal+0-adhoc.luhenry.openjdk-jd
 
 ## Conclusion
 
+We explored how the macOS-AArch64 ABI differs from the Linux-AArch64 ABI, and the impact it has on Java to native method calls.
 
-
-[^1]: [Application Binary Interface](https://en.wikipedia.org/wiki/Application_binary_interface)
+In the post, I'll dive into a new macOS security feature: JIT write protection.
