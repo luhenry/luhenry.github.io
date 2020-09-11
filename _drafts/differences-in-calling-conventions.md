@@ -5,9 +5,9 @@ layout: post
 
 _This is an installment in a [series of posts]({% post_url 2020-09-07-openjdk-on-aarch64 %}) that will highlight discoveries I am making as I add support for Windows-AArch64 and macOS-AArch64 to the OpenJDK_
 
-In the [ARM64 Function Calling Convention](https://developer.apple.com/library/archive/documentation/Xcode/Conceptual/iPhoneOSABIReference/Articles/ARM64FunctionCallingConventions.html), Apple describes where and how the macOS-AArch64 calling convention differs from the [official one](https://developer.arm.com/documentation/ihi0055/b/) used on Linux and Windows. This calling convention is part of the ABI which you can read more about at [What's an ABI anyways?]({% post_url 2020-09-08-whats-an-abi-anyways %}).
+In the [ARM64 Function Calling Convention](https://developer.apple.com/library/archive/documentation/Xcode/Conceptual/iPhoneOSABIReference/Articles/ARM64FunctionCallingConventions.html), Apple describes where and how the macOS-AArch64 calling convention differs from the [official one](https://developer.arm.com/documentation/ihi0055/b/) used on Linux and Windows. This calling convention is part of the ABI, which you can read more about at [What's an ABI anyways?]({% post_url 2020-09-08-whats-an-abi-anyways %}).
 
-In the official calling convention, parameters are 8-bytes aligned, while on macOS (and iOS), the parameters are aligned on their size. For example, `int` is 4-bytes wide and 4-bytes aligned, and `short` is 2-bytes wide and 2-bytes aligned. That impacts any Java code calling into native code (into the VM or via JNI, for example). We can expose this failures with something as simple as `java -version`.
+In the official calling convention, parameters are 8-bytes aligned, while on macOS (and iOS), the parameters are aligned on their size. For example, `int` is 4-bytes wide and 4-bytes aligned, and `short` is 2-bytes wide and 2-bytes aligned. That impacts any Java code calling into native code (into the VM or via JNI, for example). We can expose this difference with something as simple as `java -version`.
 
 ## The symptoms
 
@@ -118,7 +118,7 @@ Here is what we have learned so far:
 
 This is a classic example of a calling convention mismatch between the caller and the callee. On the one hand, the caller, respecting a specific ABI, puts the parameters in a pre-defined set of locations (register or stack slots). On the other hand, the callee, respecting another ABI, expects the parameters to be passed in a different pre-defined set of locations.
 
-## Understanding the differences in ABI
+## Understanding the difference
 
 Let's visualize the differences between the calling conventions of Linux-AArch64 and macOS-AArch64.
 
@@ -137,7 +137,7 @@ Let's visualize the differences between the calling conventions of Linux-AArch64
 | `flags`   | 4            | **`sp+16`**   | **`sp+12`**   |
 | `classData` | 8          | **`sp+24`**   | **`sp+16`**   |
 
-You notice the difference between Linux-AArch64 and macOS-AArch64 around `flags` and `classData`.
+You notice the difference around `flags` and `classData`.
 
 Hotspot currently follows the Linux-AArch64 calling convention while native follows the macOS-AArch64 calling convention.
 
