@@ -1,5 +1,5 @@
 ---
-title: "JIT Memory Write Protection"
+title: "JIT Memory Write Protections"
 layout: post
 ---
 
