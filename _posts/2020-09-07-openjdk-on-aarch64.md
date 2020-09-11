@@ -7,4 +7,4 @@ In response to recent developments around ARM64 (the [Apple Silicon](https://www
 
 I'll document my journey to discover and resolve the differences between ARM64 and x86, on Linux, Windows, and macOS in these posts.
 
-- [What's an ABI anyway?]({% post_url 2020-09-08-whats-an-abi-anyway %})
+- [What's an ABI anyways?]({% post_url 2020-09-08-whats-an-abi-anyway %})

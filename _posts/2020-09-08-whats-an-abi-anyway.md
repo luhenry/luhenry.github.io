@@ -1,5 +1,5 @@
 ---
-title: "What's an ABI anyway?"
+title: "What's an ABI anyways?"
 layout: post
 ---
 
