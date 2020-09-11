@@ -1,11 +1,9 @@
 ---
-title: "What's an ABI anyways?"
+title: "What's an ABI anyway?"
 layout: post
-redirect_from:
-  - /2020/09/08/whats-an-abi-anyway.html
 ---
 
-_This is an installment in a [series of posts]({% post_url 2020-09-07-openjdk-on-aarch64 %}) that will highlight discoveries I am making as I add support for Windows-AArch64 and macOS-AArch64 to the OpenJDK_
+_This post is part a [series]({% post_url 2020-09-07-openjdk-on-aarch64 %}) about some discoveries I make as I am adding support for Windows-AArch64 and macOS-AArch64 to the OpenJDK_
 
 Before we dive further into specifics of Windows-AArch64 and macOS-AArch64, it's essential to lay out some of the platform's fundamental concepts. Here, I'm diving deeper into what an ABI is.
 
