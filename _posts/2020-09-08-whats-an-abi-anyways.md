@@ -2,7 +2,7 @@
 title: "What's an ABI anyways?"
 layout: post
 redirect_from:
-  - /2020/09/08/whats-an-abi-anyways.html
+  - /2020/09/08/whats-an-abi-anyway.html
 ---
 
 _This post is part a [series]({% post_url 2020-09-07-openjdk-on-aarch64 %}) about some discoveries I make as I am adding support for Windows-AArch64 and macOS-AArch64 to the OpenJDK_
