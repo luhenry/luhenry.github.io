@@ -1,21 +1,17 @@
 ---
-title: "Differences in Calling Convention"
+title: "Differences in Calling Conventions"
 layout: post
 ---
 
-_This post is part a [series]({% post_url 2020-09-07-openjdk-on-aarch64 %}) about some discoveries I make as I am adding support for Windows-AArch64 and macOS-AArch64 to the OpenJDK_
+_This is an installment in a [series of posts]({% post_url 2020-09-07-openjdk-on-aarch64 %}) that will highlight discoveries I am making as I add support for Windows-AArch64 and macOS-AArch64 to the OpenJDK_
 
-_If you don't know what an ABI or a calling convention is, I invite you to read [What's an ABI anyway?]({% post_url 2020-09-08-whats-an-abi-anyway %}). If you're still not sure what an ABI is, let me know at [hi@ludovic.dev](mailto:hi@ludovic.dev), and I'll make sure to update the article._
+In the [ARM64 Function Calling Convention](https://developer.apple.com/library/archive/documentation/Xcode/Conceptual/iPhoneOSABIReference/Articles/ARM64FunctionCallingConventions.html), Apple describes where and how the macOS-AArch64 calling convention differs from the [official one](https://developer.arm.com/documentation/ihi0055/b/) used on Linux and Windows. This calling convention is part of the ABI which you can read more about at [What's an ABI anyways?]({% post_url 2020-09-08-whats-an-abi-anyway %}).
 
-In [ARM64 Function Calling Convention](https://developer.apple.com/library/archive/documentation/Xcode/Conceptual/iPhoneOSABIReference/Articles/ARM64FunctionCallingConventions.html), Apple describes where and how the macOS-AArch64 calling convention differs from the [official one](https://developer.arm.com/documentation/ihi0055/b/) used on Linux and Windows.
-
-The more impactful divergence to Hotspot is the alignment of parameters passed on the stack. In the official calling convention, parameters are 8-bytes aligned, while on macOS (and iOS), the parameters are aligned on their size. For example, `int` is 4-bytes wide and 4-bytes aligned, and `short` is 2-bytes wide and 2-bytes aligned. That impacts any Java code calling into native code (into the VM or via JNI, for example). Luckily there are only a few places in Hotspot that generate this transition from Java to native: in the interpreter and in the compiler.
-
-Due to technical and historical reasons, the code is not shared across these two. We'll then need to modify both for everything to work.
+In the official calling convention, parameters are 8-bytes aligned, while on macOS (and iOS), the parameters are aligned on their size. For example, `int` is 4-bytes wide and 4-bytes aligned, and `short` is 2-bytes wide and 2-bytes aligned. That impacts any Java code calling into native code (into the VM or via JNI, for example). We can expose this failures with something as simple as `java -version`.
 
 ## The symptoms
 
-While trying to make `java -version` run, I encounter the following issue:
+That is what happens when I run `java -version`:
 
 ```
 $> build/macosx-aarch64-server-slowdebug/jdk/bin/java -version
@@ -26,9 +22,9 @@ java.lang.InternalError: DMH.invokeStatic=Lambda(a0:L,a1:L,a2:L,a3:L,a4:L,a5:L,a
 Caused by: java.lang.IllegalArgumentException: classData is only applicable for hidden classes
 ```
 
-From a quick search for `classData is only applicable for hidden classes`, we find that the exception is thrown from [src/hotspot/share/prims/jvm.cpp:1025](https://github.com/openjdk/jdk/blob/869b05169fdb3a1ac851b367a2284ca0c5bb4d7a/src/hotspot/share/prims/jvm.cpp#L1025).
+From a quick search in the OpenJDK source code for `classData is only applicable for hidden classes`, we find that the exception is thrown from [src/hotspot/share/prims/jvm.cpp:1025](https://github.com/openjdk/jdk/blob/869b05169fdb3a1ac851b367a2284ca0c5bb4d7a/src/hotspot/share/prims/jvm.cpp#L1025).
 
-Let's run with a debugger to gather more information about the bug:
+Running with a debugger yielded more information about the crash:
 
 ```
 $> lldb -- build/macosx-aarch64-server-slowdebug/jdk/bin/java -version
@@ -120,7 +116,7 @@ Here is what we have learned so far:
 - `flags` is equal to `10` in Java but `0` in native
 - `classData` is a valid, non-NULL object in Java, but it is equal to `0xa` in native.
 
-It is a classic example of a calling convention mismatch between the caller and the callee. On the one hand, the caller, respecting a specific ABI, puts the parameters in a pre-defined set of locations (register or stack slots). On the other hand, the callee, respecting another ABI, expects the parameters to be passed in a different pre-defined set of locations.
+This is a classic example of a calling convention mismatch between the caller and the callee. On the one hand, the caller, respecting a specific ABI, puts the parameters in a pre-defined set of locations (register or stack slots). On the other hand, the callee, respecting another ABI, expects the parameters to be passed in a different pre-defined set of locations.
 
 ## Understanding the differences in ABI
 
@@ -143,18 +139,29 @@ Let's visualize the differences between the calling conventions of Linux-AArch64
 
 You notice the difference between Linux-AArch64 and macOS-AArch64 around `flags` and `classData`.
 
+Hotspot currently follows the Linux-AArch64 calling convention while native follows the macOS-AArch64 calling convention.
+
 Let's map the stack at the time of the call. _(Note that the memory ordering is little-endian.)_
 
 ```
-        sp+0     sp+4     sp+8     sp+12    sp+16    sp+20    sp+24    sp+28
-        00000000 00000000 10000000 00000000 a0000000 00000000 022d1a9f 10000000
-  Java: ^ pd              ^ init            ^ flags           ^ classData
-native: ^ pd              ^ init   ^ flags  ^ classData
+                     Java         native
+sp+28 | 10000000 |             
+sp+24 | 022d1a9f | < classData
+sp+20 | 00000000 |            
+sp+16 | a0000000 | < flags      < classData
+sp+12 | 00000000 |              < flags
+sp+8  | 10000000 | < init       < init
+sp+4  | 00000000 |            
+sp+0  | 00000000 | < pd         < pd
 ```
 
 This clarifies why `flags` is `10` in Java but `0` in native, and why `classData` is a valid pointer in Java but `0xa` in native.
 
 ## How to fix it?
+
+The fix is to teach Hotspot to use the macOS-AArch64 calling convention when running on macOS-AArch64.
+
+Luckily there are only a few places in Hotspot that generate this transition from Java to native: in the interpreter and in the compiler. Due to technical and historical reasons, the code is not shared across these two. We'll then need to modify both for everything to work.
 
 In [`InterpreterRuntime::SignatureHandlerGenerator::pass_int`](https://github.com/openjdk/jdk/blob/869b05169fdb3a1ac851b367a2284ca0c5bb4d7a/src/hotspot/cpu/aarch64/interpreterRT_aarch64.cpp#L54-L93), we have the following:
 
@@ -215,7 +222,7 @@ However, we still need to ensure that any 8-bytes wide values (like `long`, obje
      _stack_offset += wordSize;
 ```
 
-With these fixes, it now runs successfully:
+With these fixes and a few others similar to this one, `java -version` now runs successfully:
 
 ```
 $> build/macosx-aarch64-server-slowdebug/jdk/bin/java -version
