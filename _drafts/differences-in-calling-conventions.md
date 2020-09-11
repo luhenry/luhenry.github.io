@@ -3,7 +3,7 @@ title: "Differences in Calling Conventions"
 layout: post
 ---
 
-_This is an installment in a [series of posts]({% post_url 2020-09-07-openjdk-on-aarch64 %}) that will highlight discoveries I am making as I add support for Windows-AArch64 and macOS-AArch64 to the OpenJDK_
+_This is an installment in a [series of posts]({% post_url 2020-09-07-openjdk-on-aarch64 %}) that will highlight discoveries I am making as I add support for Windows-AArch64 and macOS-AArch64 to the OpenJDK._
 
 In the [ARM64 Function Calling Convention](https://developer.apple.com/library/archive/documentation/Xcode/Conceptual/iPhoneOSABIReference/Articles/ARM64FunctionCallingConventions.html), Apple describes where and how the macOS-AArch64 calling convention differs from the [official one](https://developer.arm.com/documentation/ihi0055/b/) used on Linux and Windows. This calling convention is part of the ABI, which you can read more about at [What's an ABI anyways?]({% post_url 2020-09-08-whats-an-abi-anyways %}).
 
