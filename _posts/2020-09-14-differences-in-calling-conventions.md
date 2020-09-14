@@ -24,7 +24,7 @@ Caused by: java.lang.IllegalArgumentException: classData is only applicable for 
 
 From a quick search in the OpenJDK source code for `classData is only applicable for hidden classes`, we find that the exception is thrown from [src/hotspot/share/prims/jvm.cpp:1025](https://github.com/openjdk/jdk/blob/869b05169fdb3a1ac851b367a2284ca0c5bb4d7a/src/hotspot/share/prims/jvm.cpp#L1025).
 
-Running with a debugger yielded more information about the crash:
+Running with a debugger yields more information about the crash:
 
 ```
 $> lldb -- build/macosx-aarch64-server-slowdebug/jdk/bin/java -version
