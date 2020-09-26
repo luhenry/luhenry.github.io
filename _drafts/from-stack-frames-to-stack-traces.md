@@ -26,29 +26,29 @@ In this structure, `N` is a per-function constant that is determined by the comp
 You can then, for example, have the following on the stack:
 
 ```
-     0x7200 |             |
-            |-------------|
-     0x71f8 | lr = 0x0    |<-\ // the thread's root frame, it has no parent
+     0x7200 |             |<-\
+            |-------------|  |
+     0x71f8 | lr = 0x0    |  | // the thread's root frame, it has no parent
      0x71f0 | fp = 0x0    |  |
      [...]  | ...         |  |
-     0x71d0 | data[0]     |  |
+     0x71d0 | data[0]     |<-\
             |-------------|  |
      0x71c8 | lr = 0x12   |  |
-     0x71c0 | fp = 0x7200 |<-\
+     0x71c0 | fp = 0x7200 |  |
      [...]  | ...         |  |
-     0x71e8 | data[0]     |  |
+     0x71e8 | data[0]     |<-\
             |-------------|  |
      0x71e0 | lr = 0x5a   |  |
      0x71d8 | fp = 0x71d0 |<-\
             |-------------|  |
      0x70d0 | lr = 0x90   |  |
-     0x70c8 | fp = 0x71e8 |<-\
+     0x70c8 | fp = 0x71e8 |  |
      0x70c0 | data[2]     |  |
      0x70b8 | data[1]     |  |
 rfp: 0x70b0 | data[0]     |  |
             |-------------|  |
      0x70ac | lr = 0x42   |  | // the thread's currently executing frame
-     0x70a0 | fp = 0x70d8 |--/
+     0x70a0 | fp = 0x71d8 |--/
      0x709c | data[3]     |
      0x7090 | data[2]     |
      0x708c | data[1]     |
