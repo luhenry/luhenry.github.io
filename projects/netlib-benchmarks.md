@@ -104,34 +104,34 @@ layout: default
     var data = new Map();
 
     for await (const run of getRunsForRelease(release)) {
-      const jdkVersionRaw = run.jdkVersion;
-      if (jdkVersionRaw === undefined) {
+      if (run.jdkVersion === undefined) {
         console.log("can't parse run, unknown jdkVersion");
         continue;
       }
-      const jdkVersionRawA = jdkVersionRaw.split('.');
-      const jdkVersion = parseInt(jdkVersionRawA[0]) > 1 ?
-                          parseInt(jdkVersionRawA[0]) :
-                          parseInt(jdkVersionRawA[1])
+      const jdkVersionArray = run.jdkVersion.split('.');
+      const jdkVersion = parseInt(jdkVersionArray[0]) > 1 ?
+                          parseInt(jdkVersionArray[0]) :
+                          parseInt(jdkVersionArray[1])
 
-      const implementation = run.params.implementation;
-      if (implementation === undefined) {
+      if (run.params.implementation === undefined) {
         console.log("can't parse run, unknown implementation");
         continue;
       }
+      const implementation = run.params.implementation;
 
-      const benchmarkRaw = run.benchmark;
-      if (benchmarkRaw === undefined) {
+      if (run.benchmark === undefined) {
         console.log("can't parse run, unknown benchmark");
         continue;
       }
-      const benchmark = benchmarkRaw.replace(/^dev\.ludovic\.netlib\.benchmarks\.(blas\.l[1-3]|lapack|arpack)\./, '').replace(/Benchmark\.(blas|lapack|arpack)$/, '') + '(' + Object.keys(run.params).filter(k => k != 'implementation').map(k => `${k}: ${run.params[k]}`).join(", ") + ')'
+      const benchmark = run.benchmark.replace(/^dev\.ludovic\.netlib\.benchmarks\.(blas\.l[1-3]|lapack|arpack)\./, '')
+                                     .replace(/Benchmark\.(blas|lapack|arpack)$/, '')
+                          + '(' + Object.keys(run.params).filter(k => k != 'implementation').map(k => `${k}: ${run.params[k]}`).join(", ") + ')'
 
-      const score = run.primaryMetric.score;
-      if (score === undefined) {
+      if (run.primaryMetric.score === undefined) {
         console.log("can't parse run, unknown score");
         continue;
       }
+      const score = run.primaryMetric.score;
 
       if (!data.has(jdkVersion)) {
         data.set(jdkVersion, new Map());
@@ -156,7 +156,6 @@ layout: default
         }
       }
     }
-
 
     const colors = {
       'f2j': 'red',
