@@ -5,7 +5,6 @@ layout: default
 
 <label for="tag">Tag:</label>
 <select name="tag" id="tag">
-  <option value="" selected></option>
 </select>
 
 <div id="graphs"></div>
@@ -65,11 +64,17 @@ layout: default
   }
 
   window.onload = async function() {
+    var first = true;
     for await (const release of getReleases()) {
       var opt = document.createElement('option');
       opt.value = release.tag_name;
       opt.text = release.tag_name;
       tagE.appendChild(opt);
+      if (first) {
+        tagE.value = release.tag_name;
+        tagE.dispatchEvent(new Event('change'));
+        first = false;
+      }
     }
   };
 
