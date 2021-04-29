@@ -145,7 +145,8 @@ layout: default
       data.get(jdkVersion).get(implementation).y.push(score);
     }
 
-    for (const jdkVersion of data.keys()) {
+    const jdkVersions = Array.from(data.keys()).sort((a, b) => a - b);
+    for (const jdkVersion of jdkVersions) {
       const f2j = data.get(jdkVersion).get("f2j");
       for (const implementation of data.get(jdkVersion).keys()) {
         const results = data.get(jdkVersion).get(implementation);
@@ -156,37 +157,55 @@ layout: default
       }
     }
 
-    for (const jdkVersion of data.keys()) {
-      const graph = document.createElement('div');
-      graph.id = 'graph-' + jdkVersion;
-      graphsE.appendChild(graph);
 
-      var plotlyData = [];
+    const colors = {
+      'f2j': 'red',
+      'java': 'green',
+      'native': 'blue',
+      // old implementations
+      'vector': 'yellow',
+    };
+
+    var plotlyData = [];
+
+    var yaxis = 1;
+    for (const jdkVersion of jdkVersions) {
       for (const implementation of data.get(jdkVersion).keys()) {
         plotlyData.push({
           type: 'bar',
+          legendgroup: implementation,
           name: implementation,
+          marker: { 'color': colors[implementation], },
+          showlegend: false,
+          yaxis: `y${yaxis}`,
           x: data.get(jdkVersion).get(implementation).x,
           y: data.get(jdkVersion).get(implementation).ynorm,
         });
       }
-
-      const plotlyLayout = {
-        barmode: 'group',
-        title: jdkVersion,
-        // width: 2048 * 2,
-        height: 1200,
-        xaxis: {
-          // zeroline: true,
-          automargin: true,
-          tickangle: 45
-        },
-        yaxis: {
-          range: [0, 5],
-        }
-      };
-
-      Plotly.newPlot(graph.id, plotlyData, plotlyLayout, { responsive: true });
+      yaxis += 1;
     }
+
+    const plotlyLayout = {
+      height: 1200,
+      grid: {
+        rows: 3,
+        columns: 1
+      },
+      xaxis: {
+        automargin: true,
+        tickangle: 45
+      },
+    };
+    var i = 1;
+    for (const jdkVersion of jdkVersions) {
+      plotlyLayout[`yaxis${i}`] = {
+        title: jdkVersion,
+        rangemode: "tozero",
+        range: [0, 3],
+      }
+      i += 1;
+    }
+
+    Plotly.newPlot(graphsE.id, plotlyData, plotlyLayout, { responsive: true });
   };
 </script>
