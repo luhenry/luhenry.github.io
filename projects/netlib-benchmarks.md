@@ -30,6 +30,10 @@ layout: default
   const tagE = document.getElementById('tag');
   const graphsE = document.getElementById('graphs');
 
+  function isAssetAResult(asset) {
+    return asset.name.match(/jmh\-results\-.+\.json/) != null;
+  }
+
   async function* getReleases() {
     for await (const response of octokit.paginate.iterator(octokit.rest.repos.listReleases, { owner, repo })) {
       for (const release of response.data) {
@@ -44,7 +48,7 @@ layout: default
 
   async function* getRunsForRelease(release) {
     for (const asset of release.assets) {
-      if (asset.name.match(/jmh\-results\-.+\.json/) == null) {
+      if (!isAssetAResult(asset)) {
         continue;
       }
 
@@ -69,6 +73,9 @@ layout: default
       var opt = document.createElement('option');
       opt.value = release.tag_name;
       opt.text = release.tag_name;
+      if (release.assets.filter(a => isAssetAResult(a)).length == 0) {
+        opt.text += ' (no assets)';
+      }
       tagE.appendChild(opt);
       if (first) {
         tagE.value = release.tag_name;
@@ -89,7 +96,7 @@ layout: default
 
     const release = (await getReleaseByTag(tag)).data;
     console.log(release);
-    if (release.assets.length == 0) {
+    if (release.assets.filter(a => isAssetAResult(a)).length == 0) {
       console.log("the release has no assets");
       return;
     }
