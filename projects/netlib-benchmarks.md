@@ -47,7 +47,7 @@ layout: default
         continue;
       }
 
-      const content = await fetch("https://netlib-website.herokuapp.com/" + owner + "/" + repo + "/releases/download/" + release.tag_name + "/" + asset.name, {
+      const content = await fetch("https://api.ludovic.dev/" + owner + "/" + repo + "/releases/download/" + release.tag_name + "/" + asset.name, {
           headers: {
             'Accept': 'application/octet-stream'
           },
