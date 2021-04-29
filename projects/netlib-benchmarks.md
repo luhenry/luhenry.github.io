@@ -19,7 +19,9 @@ layout: default
 <script src='https://cdn.plot.ly/plotly-latest.min.js'></script>
 
 <script type="module">
-  import { Octokit } from "https://cdn.skypack.dev/@octokit/rest";
+  //FIXME: this import doesn't work, it fails to load es5-ext for some reasons
+  // import plotlyJs from 'https://cdn.skypack.dev/plotly.js';
+  import { Octokit } from 'https://cdn.skypack.dev/octokit';
 
   const owner = "luhenry";
   const repo = "netlib";
