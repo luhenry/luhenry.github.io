@@ -28,7 +28,7 @@ layout: default
   const octokit = new Octokit({});
 
   const tagE = document.getElementById('tag');
-  const graphsE = document.getElementById('graphs')
+  const graphsE = document.getElementById('graphs');
 
   async function* getReleases() {
     for await (const response of octokit.paginate.iterator(octokit.rest.repos.listReleases, { owner, repo })) {
