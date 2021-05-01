@@ -133,16 +133,23 @@ layout: default
       }
       const score = run.primaryMetric.score;
 
+      if (run.primaryMetric.scoreError === undefined) {
+        console.log("can't parse run, unknown scoreError");
+        continue;
+      }
+      const scoreError = run.primaryMetric.scoreError;
+
       if (!data.has(jdkVersion)) {
         data.set(jdkVersion, new Map());
       }
       if (!data.get(jdkVersion).has(implementation)) {
         data.get(jdkVersion).set(implementation, {
-          x: [], y: [], ynorm: []
+          x: [], y: [], yerror: [], ynorm: [], yerrornorm: []
         });
       }
       data.get(jdkVersion).get(implementation).x.push(benchmark);
       data.get(jdkVersion).get(implementation).y.push(score);
+      data.get(jdkVersion).get(implementation).yerror.push(scoreError);
     }
 
     const jdkVersions = Array.from(data.keys()).sort((a, b) => a - b);
@@ -153,6 +160,7 @@ layout: default
         for (var i = 0; i < results.x.length; i++) {
           //FIXME: assert results.x[i] == f2j.x[i]
           results.ynorm[i] = results.y[i] / f2j.y[i];
+          results.yerrornorm[i] = results.yerror[i] / f2j.y[i];
         }
       }
     }
@@ -179,6 +187,12 @@ layout: default
           yaxis: `y${yaxis}`,
           x: data.get(jdkVersion).get(implementation).x,
           y: data.get(jdkVersion).get(implementation).ynorm,
+          error_y: {
+            type: 'data',
+            array: data.get(jdkVersion).get(implementation).yerrornorm,
+            visible: true,
+          },
+          text: data.get(jdkVersion).get(implementation).y.map((t, i) => `score: ${t} +/- ${data.get(jdkVersion).get(implementation).yerror[i]}`),
         });
       }
       yaxis += 1;
