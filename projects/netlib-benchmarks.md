@@ -192,7 +192,7 @@ layout: default
             array: data.get(jdkVersion).get(implementation).yerrornorm,
             visible: true,
           },
-          text: data.get(jdkVersion).get(implementation).y.map((t, i) => `score: ${t} +/- ${data.get(jdkVersion).get(implementation).yerror[i]}`),
+          hovertemplate: '%{y:.2f} +/- %{error_y.array:.2f}',
         });
       }
       yaxis += 1;
