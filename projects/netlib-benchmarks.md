@@ -154,13 +154,14 @@ layout: default
 
     const jdkVersions = Array.from(data.keys()).sort((a, b) => a - b);
     for (const jdkVersion of jdkVersions) {
-      const f2j = data.get(jdkVersion).get("f2j");
+      const norm = data.get(jdkVersion).has("native") ?
+        data.get(jdkVersion).get("native") : data.get(jdkVersion).get("f2j");
       for (const implementation of data.get(jdkVersion).keys()) {
         const results = data.get(jdkVersion).get(implementation);
         for (var i = 0; i < results.x.length; i++) {
-          //FIXME: assert results.x[i] == f2j.x[i]
-          results.ynorm[i] = results.y[i] / f2j.y[i];
-          results.yerrornorm[i] = results.yerror[i] / f2j.y[i];
+          //FIXME: assert results.x[i] == norm.x[i]
+          results.ynorm[i] = results.y[i] / norm.y[i];
+          results.yerrornorm[i] = results.yerror[i] / norm.y[i];
         }
       }
     }
