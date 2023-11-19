@@ -3,36 +3,38 @@ title: "QEMU on Github Actions"
 layout: post
 ---
 
-GHA is great! It’s free (20 runners for open repositories per org), it has a rich ecosystem of actions, the runners managed by the team at GitHub (you don’t have to keep track of updates and security fixes), it integrates to GitHub (releases, pull requests, issues, etc.), and it supports multiple platforms: combinations of x86 and aarch64, and Linux, windows, and macOS.
+GHA is great! It’s free (20 runners for open repositories per org), it has a rich ecosystem of actions, the runners are managed by the team at GitHub (updates and security fixes), it integrates to GitHub (releases, pull requests, issues, etc.), and it supports multiple platforms: Linux, windows, and macOS on x86.
 
-However, the set of architectures isn’t as exhaustive as what your users may run on. For example, Java is available on s390x (IBM mainframes), ppc64, arm, and riscv64. You could add self-hosted runners for each of these platforms, but you lose most of the advantages of GitHub-provided runners (need to manage the infra, install updates, reboot machines, etc.).
+However, the set of architectures isn’t as exhaustive as what your users may run on. For example, Java is available on aarch64, armhf, s390x (IBM mainframes), ppc64el, and riscv64. You could add self-hosted runners for each of these platforms, but you lose most of the advantages of GitHub-provided runners.
 
 An alternative to self-hosted runner is to use the GitHub-provided runners with a twist: emulation 🫣 (not as scary as you think).
+
+Let's look into what emulation is and how it works.
 
 # Emulation with QEMU
 
 Emulation allows you to run an application written for an architecture (ex: riscv64) on another architecture (ex: x86). This emulation then takes care of translating from riscv64 or s390x to x86 for example, allowing you to transparently run programs across architectures.
 
-The most commonly used emulation software in the Unix ecosystem is QEMU. It has really become the Swiss Army knife of emulation, supporting most architectures (many I have never heard of), making it a necessary tool for any new architecture’s ecosystem bringup.
+The most commonly used emulation software in the Unix ecosystem is QEMU. It has become the Swiss Army knife of emulation, supporting most architectures (many I have never heard of), making it a necessary tool for any new architecture’s ecosystem bringup.
 
 QEMU supports two modes of execution:
-System emulation: it emulates a machine on which you need to boot a Linux. You then into that machine SSH to run your application. It is similar to launching a VM on your machine.
-User-mode emulation: the kernel is still the host’s one and QEMU emulates the syscalls. Whenever your application makes a syscall, QEMU takes over and acts accordingly, calling into the host kernel where it makes sense, “faking” the syscall otherwise.
+* System emulation: it emulates a machine on which you need to boot a Linux kernel. You then SSH into that machine to run your application. It is similar to launching a VM on your machine.
+* User-mode emulation: the kernel is still the host’s one and QEMU emulates the syscalls. Whenever your application makes a syscall, QEMU takes over and acts accordingly, calling into the host kernel where it makes sense, “faking” the syscall otherwise.
 
-The user-mode emulation is the easiest to put in place on CI as you launch your application just like any other, and QEMU makes sure everything “just works”.
+The user-mode emulation is the easiest to put in place on CI as you launch your application just like any other process, and QEMU makes sure everything “just works”.
 
-So how do you run your application with QEMU? The most explicit is to run `qemu-riscv64-static myapplication`. Let’s take an example of the OpenJDK compiled for riscv64 and running it on an x86 machine (download one from adoptium here)
+So how do you run your application with QEMU? The most explicit is to run `qemu-riscv64-static myapplication`. Let’s take an example of the OpenJDK compiled for riscv64 and running it on an x86 machine (you can download one from adoptium [here](https://ci.adoptium.net/job/build-scripts/job/jobs/job/evaluation/job/jobs/job/jdk21u/job/jdk21u-evaluation-linux-riscv64-temurin/lastSuccessfulBuild/artifact/workspace/target/OpenJDK21U-jdk_riscv64_linux_hotspot_2023-11-13-16-12.tar.gz))
 
 If you try running it, you’ll get the following:
 ```
-$> /usr/lib/jvm/java-21-openjdk-riscv64/bin/java -version
-bash: exec format error: /usr/lib/jvm/java-21-openjdk-riscv64/bin/java
+$> /path/to/jdk/bin/java -version
+bash: exec format error: /path/to/jdk/bin/java
 ```
 
 That makes sense given the binary is targeting riscv64 and we are trying to run it on x86. We confirm it’s a riscv64 binary with:
 ```
-$> file /usr/lib/jvm/java-21-openjdk-riscv64/bin/java
-/usr/lib/jvm/java-21-openjdk-riscv64/bin/java: ELF 64-bit LSB pie executable, UCB RISC-V, RVC, double-float ABI, version 1 (SYSV), dynamically linked, interpreter /lib/ld-linux-riscv64-lp64d.so.1, BuildID[sha1]=e4445fabaa78b36248d15f0e6a3652939c1f64c1, for GNU/Linux 4.15.0, stripped
+$> file /path/to/jdk/bin/java
+/path/to/jdk/bin/java: ELF 64-bit LSB pie executable, UCB RISC-V, RVC, double-float ABI, version 1 (SYSV), dynamically linked, interpreter /lib/ld-linux-riscv64-lp64d.so.1, BuildID[sha1]=e4445fabaa78b36248d15f0e6a3652939c1f64c1, for GNU/Linux 4.15.0, stripped
 ```
 
 Notice the `ELF 64-bit LSB pie executable, UCB RISC-V`.
@@ -45,7 +47,7 @@ $> sudo apt install qemu-user-static
 
 Then, run:
 ```
-$> qemu-riscv64-static /usr/lib/jvm/java-21-openjdk-riscv64/bin/java -version
+$> qemu-riscv64-static /path/to/jdk/bin/java -version
 qemu-riscv64-static: Could not open '/lib/ld-linux-riscv64-lp64d.so.1': No such file or directory
 ```
 
@@ -99,9 +101,9 @@ $> file sysroot/bin/bash
 sysroot/bin/bash: ELF 64-bit LSB pie executable, UCB RISC-V, RVC, double-float ABI, version 1 (SYSV), dynamically linked, interpreter /lib/ld-linux-riscv64-lp64d.so.1, BuildID[sha1]=7ed4e703c21cd514edcf8100a05580e75e174735, for GNU/Linux 4.15.0, stripped
 ```
 
-Now, how do we use that sysroot to run our java for riscv64 binary? Simply:
+Now, how do we use that sysroot to run our java for riscv64 binary? Simply tell QEMU where to load files from with `QEMU_LD_PREFIX`:
 ```
-$> QEMU_LD_PREFIX=sysroot qemu-riscv64-static /usr/lib/jvm/java-21-openjdk-riscv64/bin/java -version
+$> QEMU_LD_PREFIX=sysroot qemu-riscv64-static /path/to/jdk/bin/java -version
 openjdk version "21" 2023-09-19
 OpenJDK Runtime Environment (build 21+35-Ubuntu-1)
 OpenJDK 64-Bit Server VM (build 21+35-Ubuntu-1, mixed mode, sharing)
@@ -109,13 +111,13 @@ OpenJDK 64-Bit Server VM (build 21+35-Ubuntu-1, mixed mode, sharing)
 
 And it works! Congratulations, you got a riscv64 binary running on x86, isn’t technology incredible? Go ahead, try it out, run a more complex workload. I frequently run the whole of the OpenJDK or larger applications like Apache Spark, and it works (mostly) flawlessly.
 
-Ok, but you’ll tell me it’s a bit tedious to use that `qemu-riscv64-static` all the time, and how does it work when the process forks and creates children? Well it doesn’t, out of the box. Actually it does when you install qemu-user-static because it’s smart, but let’s figure out how it works exactly.
+Ok, it’s all a bit tedious to use that `qemu-riscv64-static` all the time. And how does it even work when the process forks and creates children? Well it doesn’t out of the box. Actually it does when you install qemu-user-static because it’s smart, but let’s figure out how it's done exactly.
 
 # Binary format
 
-First, let me show you some magic, go ahead, try the following:
+First, let me show you some magic. Go ahead, try the following:
 ```
-$> QEMU_LD_PREFIX=sysroot /usr/lib/jvm/java-21-openjdk-riscv64/bin/java -version
+$> QEMU_LD_PREFIX=sysroot /path/to/jdk/bin/java -version
 openjdk version "21" 2023-09-19
 OpenJDK Runtime Environment (build 21+35-Ubuntu-1)
 OpenJDK 64-Bit Server VM (build 21+35-Ubuntu-1, mixed mode, sharing)
@@ -123,9 +125,11 @@ OpenJDK 64-Bit Server VM (build 21+35-Ubuntu-1, mixed mode, sharing)
 
 Wait! It Just Works™?? What’s that magic!? Welcome to the wonderful world of binfmt (binary format).
 
-So what is it exactly? Simply put, a bunch of magic values on every executables that the Linux kernel uses to know how to interpret that executable. For example, for dynamically linked binaries, the kernel doesn’t know how to load the linked libraries (where to probe for the libraries? based on which user-space configuration and environment variables?) and it relies on an “interpreter” to do it. The interpreter for dynamically linked binaries is the dynamic linker that we mentioned earlier. Whenever a new process is launched (via the execve syscall), the kernel probes for the magic number in the executable for that process, and calls the corresponding interpreter [1]. Each architecture has a magic number, ???? for x86_64, ???? for x86_32, and ??? for riscv64 for example. But then, how does the kernel know where to find the interpreter for a given magic number? Through binfmt!
+The kernel knows how to load a variety of formats: ELF, a.out, static executables among others. But it's not feasible for the kernel to know all executables format out there, especially as you can get pretty creative - want to execute a JAR file or python script as a plain old executable without prefixing with `java` or `python`, of couse you can do that!
 
-You can find the registered interpreters at ‘/proc/sys/fs/binfmt_misc`. On my machine I have:
+The [binfmt_misc](https://en.m.wikipedia.org/wiki/Binfmt_misc) mechanism allows to add support for these additional mechanism. It allows you to register to the kernel specific "interpreter" for "arbitrary executable file formats to be recognized and passed to certain user space applications, such as emulators and virtual machines." (Read [How programs get run](https://lwn.net/Articles/630727/) and [How programs get run: ELF binaries](https://lwn.net/Articles/631631/) articles on LWN from David Drysdale for in-depth details)
+
+You can find the registered interpreters at `/proc/sys/fs/binfmt_misc`. On my machine I have:
 ```
 $> ls -alh /proc/sys/fs/binfmt_misc
 total 0
@@ -168,7 +172,7 @@ dr-xr-xr-x 1 root root 0 Oct 24 12:26 ..
 -rw-r--r-- 1 root root 0 Nov 13 17:06 status
 ```
 
-Let’s look at the interpreter for qemu-riscv64-static:
+Let’s look at the interpreter for `qemu-riscv64`:
 ```
 $> cat /proc/sys/fs/binfmt_misc/qemu-riscv64
 enabled
@@ -180,17 +184,17 @@ mask ffffffffffffff00fffffffffffffffffeffffff
 ```
 
 Here is what we can find:
-The magic number for riscv64
-The path to the qemu-riscv64-static executable
-Some options
+* The magic number for riscv64
+* The path to the qemu-riscv64-static executable
+* Some options
 
 Let’s recap how it works:
-In your shell, you launch Java compiled for riscv64
-The shell calls execve with the Java executable as argument
-The kernel probes for the magic number in the riscv64 Java executable
-That magic number matches for the qemu-riscv64-static as interpreter
-The kernel invokes qemu-riscv64-static to “interpret” the riscv64 executable, loading it into memory
-qemu-riscv64-static l then 1. start translating the java executable from riscv64 assembly to x86, and 2. executes that newly generated x86 code
+1. In your shell, you launch your `java` executable compiled for riscv64
+2. The shell calls `execve` with the `java` executable as argument
+3. The kernel probes for the magic number in the riscv64 `java` executable
+4. That magic number matches for the `qemu-riscv64` interpreter
+5. The kernel invokes `qemu-riscv64` to “interpret” the riscv64 executable
+6. `qemu-riscv64` l then start translating the java executable from riscv64 assembly to x86, and executes that newly generated x86 code
 
 And that’s it! That’s how riscv64 assembly is executed transparently on x86 machines with QEMU.
 
@@ -200,7 +204,7 @@ The main issue with this whole thing now is that I still need to setup a sysroot
 
 Docker of course! (When is it not a solution?)
 
-The easiest way is the following (assuming qemu-user-static is already setup):
+The easiest way is the following (assuming `qemu-user-static`` is already setup):
 ```
 $> docker run --rm -it --platform linux/riscv64 riscv64/ubuntu:23.04
 ```
@@ -209,9 +213,8 @@ And with that you will have an Ubuntu 23.04 running riscv64 on your x86 machine 
 
 Go ahead, try it. Run `uname -m` for fun. Or even install a package of your choice with `apt install`, it just works! (If it doesn’t let me know, it’s a bug)
 
-Do you need to do all that on your machine, all of it by hand? Luckily no, especially on GHA, where you’ve a bunch of actions already available. Let’s explore some of them.
+Do you need to do all that on your machine, all of it by hand? Luckily no, especially on GHA, where you’ve a bunch of actions already available. Let’s explore some of them in the next part of this post.
 
-# Running on GHA
+# Next
 
-Docker-arch-actions
-run-on-arch
+Let's look in the next post how to use all of the on GHA to build and test your projects on RISC-V. (Link incoming once posted.)
