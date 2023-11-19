@@ -1,5 +1,5 @@
 ---
-title: "QEMU on Github Actions"
+title: "QEMU and Github Actions"
 layout: post
 ---
 
